@@ -1,35 +1,24 @@
 # High Concurrency Booking System
 
-A production-ready Node.js booking backend designed to prevent double-booking under high concurrency using Redis-based temporary locks and PostgreSQL transaction safety.
+Node.js backend for seat booking with concurrency control using Redis locking and PostgreSQL transactions.
 
-## Problem Statement
+## What this project solves
 
-Booking systems often break down under concurrent traffic.
+This system is designed for a common real-world problem: multiple users trying to book the same resource at the same time.
 
-- Multiple users can attempt to reserve the same seat at the same time.
-- A naive read-then-write flow can create race conditions.
-- Two requests may see the same seat as available and both proceed.
-- The result is double-booking, inconsistent data, and poor user experience.
+Without proper coordination, this leads to:
+- double booking
+- race conditions
+- inconsistent database state
 
-## Architecture
+## How it works (high level)
 
-This system uses Redis and PostgreSQL for different responsibilities.
+The system separates responsibilities:
 
-- **Redis**
-  - Handles low-latency, temporary seat locking.
-  - Uses `SET NX PX` to create a lock only if it does not already exist.
-  - Ensures atomic lock acquisition, preventing concurrent access to the same seat.
-  - Uses TTL to automatically expire abandoned locks.
-
-- **PostgreSQL + Prisma**
-  - Stores seats and bookings as the source of truth.
-  - Uses transactions for final booking consistency.
-  - Ensures seat state updates and booking creation happen atomically.
-
-- **Express.js**
-  - Exposes the HTTP API.
-  - Orchestrates validation, lock checks, and booking flow.
-  - Keeps the codebase modular and maintainable.
+- Redis is used for temporary locking during booking attempts
+- PostgreSQL is the source of truth for seats and bookings
+- Prisma handles database operations
+- Express exposes APIs for user and admin actions
 
 ## Booking Flow Diagram
 
@@ -294,22 +283,13 @@ See `/docs/concurrency-test.md` for full details.
 
 ## Tradeoffs
 
-- Redis locking improves performance but introduces eventual consistency concerns if not carefully managed.
-- System relies on TTL for recovery instead of strict distributed consensus (e.g., Redlock).
+- Redis introduces eventual consistency in lock timing
+- System depends on TTL for recovery instead of distributed consensus
+- Slight complexity added for concurrency safety
 
-## Future Improvements
+## Things that can be improved later
 
-- **Lua script**
-  - Make lock acquisition and validation atomic in Redis.
-
-- **Idempotency**
-  - Prevent duplicate booking requests from creating duplicate records.
-
-- **Load testing**
-  - Validate concurrency behavior under real traffic.
-
-- **Observability**
-  - Add structured logging, metrics, and tracing.
-
-- **Lock cleanup**
-  - Add more robust lock release and expiration handling.
+- add idempotency keys for booking requests
+- introduce rate limiting on booking endpoint
+- improve lock handling using Lua scripts
+- add observability (logs, traces, metrics)
