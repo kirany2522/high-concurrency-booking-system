@@ -9,7 +9,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
   LOCK_TTL_MS: z.coerce.number().int().positive().default(30000),
+  ADMIN_API_KEY: z.string().min(1).default("dev-admin-key"),
 });
 
 export const env = envSchema.parse(process.env);
-

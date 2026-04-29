@@ -103,6 +103,12 @@ The booking process follows a simple and safe sequence:
   - Confirms the booking in PostgreSQL.
   - Marks the seat as `BOOKED`.
 
+- `POST /admin/seats`
+  - Creates one or many seats in PostgreSQL.
+  - Requires the `x-admin-api-key` header.
+  - Accepts `price` and optional `count` for bulk seat creation.
+  - Useful for seeding inventory without touching the public booking flow.
+
 ## How to Run
 
 ### 1. Start infrastructure
@@ -123,17 +129,51 @@ npm run prisma:migrate
 npm run db:seed
 ```
 
-### 4. Start the application
+### 4. Configure admin access
+
+Set the admin key in `.env` if you want to use the admin seat creation endpoint.
+
+Run the following command to generate a secure API key:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Example `.env` value:
+
+```bash
+ADMIN_API_KEY=your-generated-key
+```
+
+### 5. Start the application
 
 ```bash
 docker compose up --build app
 ```
 
-### 5. Test the API
+### 6. Test the API
 
 ```bash
 curl http://localhost:3000/health
 curl http://localhost:3000/seats
+```
+
+### 7. Create seats in bulk
+
+```bash
+curl -X POST http://localhost:3000/admin/seats \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: dev-admin-key" \
+  -d '{"price":150,"count":20}'
+```
+
+Single-seat creation still works:
+
+```bash
+curl -X POST http://localhost:3000/admin/seats \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: dev-admin-key" \
+  -d '{"price":150}'
 ```
 
 ## Key Concepts
