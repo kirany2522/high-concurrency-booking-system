@@ -1,0 +1,295 @@
+# High Concurrency Booking System
+
+Node.js backend for seat booking with concurrency control using Redis locking and PostgreSQL transactions.
+
+## What this project solves
+
+This system is designed for a common real-world problem: multiple users trying to book the same resource at the same time.
+
+Without proper coordination, this leads to:
+- double booking
+- race conditions
+- inconsistent database state
+
+## How it works (high level)
+
+The system separates responsibilities:
+
+- Redis is used for temporary locking during booking attempts
+- PostgreSQL is the source of truth for seats and bookings
+- Prisma handles database operations
+- Express exposes APIs for user and admin actions
+
+## Booking Flow Diagram
+
+```text
+Client
+  │
+  ├── POST /lock-seat
+  │       │
+  │       ├── Redis SET NX PX (lock)
+  │       └── returns lock token
+  │
+  ├── POST /book
+  │       │
+  │       ├── Validate lock (Redis)
+  │       ├── DB Transaction:
+  │       │     ├── Update seat → BOOKED
+  │       │     └── Create booking
+  │       └── Delete lock
+  │
+  └── Response → Booking confirmed
+
+```
+
+## Booking Flow
+
+The booking process follows a simple and safe sequence:
+
+1. **Lock**
+   - Client requests a temporary lock for a seat.
+   - Redis creates the lock using `SET NX PX`.
+   - If a lock already exists, the request is rejected.
+
+2. **Validate**
+   - The booking request checks the lock token.
+   - The seat is verified in PostgreSQL before final booking.
+   - This prevents stale or invalid lock usage.
+
+3. **Book**
+   - PostgreSQL transaction updates the seat to `BOOKED` using a conditional update (only if not already BOOKED).
+   - A booking record is created atomically.
+   - Ensures the lock belongs to the requesting user before proceeding.
+   - The Redis lock is removed after success.
+
+## Failure Scenarios Handled
+
+- **Concurrent booking attempts**
+  - Redis lock ensures only one user can reserve a seat at a time.
+
+- **User abandons booking**
+  - TTL automatically releases the lock after expiration.
+
+- **Duplicate booking requests**
+  - Database constraints + transaction prevent inconsistent writes.
+
+- **Race conditions**
+  - Redis lock + conditional DB update ensures correctness even if concurrent requests bypass the lock layer.
+
+## API Endpoints
+
+- `GET /seats`
+  - Returns all seats from PostgreSQL.
+  - Used to inspect seat availability and pricing.
+
+- `POST /lock-seat`
+  - Creates a temporary Redis lock for a seat.
+  - Uses `SET NX PX` with TTL.
+  - Returns a lock token for the booking step.
+
+- `POST /book`
+  - Validates the lock token and ownership.
+  - Confirms the booking in PostgreSQL.
+  - Marks the seat as `BOOKED`.
+
+- `POST /admin/seats`
+  - Creates one or many seats in PostgreSQL.
+  - Requires the `x-admin-api-key` header.
+  - Accepts validated `price` and optional `count` for bulk seat creation.
+  - Useful for seeding inventory without touching the public booking flow.
+
+- `PATCH /admin/seats/:seatId`
+  - Updates seat price or status.
+  - Requires the `x-admin-api-key` header.
+  - At least one field must be provided.
+
+- `DELETE /admin/seats/:seatId`
+  - Deletes a seat by id.
+  - Requires the `x-admin-api-key` header.
+  - Returns a conflict if the seat has related bookings.
+
+- `PATCH /admin/seats/bulk`
+  - Updates multiple seats in one request.
+  - Requires the `x-admin-api-key` header.
+  - Returns per-seat success and failure results.
+
+- `DELETE /admin/seats/bulk`
+  - Deletes multiple seats in one request.
+  - Requires the `x-admin-api-key` header.
+  - Returns per-seat success and failure results.
+
+## How to Run
+
+### 1. Start infrastructure
+
+```bash
+docker compose up -d postgres redis
+```
+
+### 2. Apply Prisma migrations
+
+```bash
+npm run prisma:migrate
+```
+
+### 3. Seed sample seats
+
+```bash
+npm run db:seed
+```
+
+### 4. Configure admin access
+
+Set the admin key in `.env` if you want to use the admin seat creation endpoint.
+
+Run the following command to generate a secure API key:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Example `.env` value:
+
+```bash
+ADMIN_API_KEY=your-generated-key
+```
+
+### 5. Start the application
+
+```bash
+docker compose up --build app
+```
+
+### 6. Test the API
+
+```bash
+curl http://localhost:3000/health
+curl http://localhost:3000/seats
+```
+
+### 7. Create seats in bulk
+
+```bash
+curl -X POST http://localhost:3000/admin/seats \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: your-generated-key" \
+  -d '{"price":150,"count":20}'
+```
+
+Validation rules:
+
+- `price` must be greater than `0` and at most `1000000`
+- `count` must be an integer between `1` and `500`
+- If `count` is omitted, the API creates `1` seat
+
+Single-seat creation still works:
+
+```bash
+curl -X POST http://localhost:3000/admin/seats \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: your-generated-key" \
+  -d '{"price":150}'
+```
+
+Update a seat:
+
+```bash
+curl -X PATCH http://localhost:3000/admin/seats/seat-1 \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: your-generated-key" \
+  -d '{"price":180,"status":"AVAILABLE"}'
+```
+
+Delete a seat:
+
+```bash
+curl -X DELETE http://localhost:3000/admin/seats/seat-1 \
+  -H "x-admin-api-key: your-generated-key"
+```
+
+Bulk update seats:
+
+```bash
+curl -X PATCH http://localhost:3000/admin/seats/bulk \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: your-generated-key" \
+  -d '{"seatIds":["seat-1","seat-2"],"price":180,"status":"AVAILABLE"}'
+```
+
+Bulk delete seats:
+
+```bash
+curl -X DELETE http://localhost:3000/admin/seats/bulk \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: your-generated-key" \
+  -d '{"seatIds":["seat-1","seat-2"]}'
+```
+
+Bulk response shape:
+
+```json
+{
+  "data": {
+    "status": "PARTIAL_SUCCESS",
+    "totalRequested": 2,
+    "successCount": 1,
+    "failureCount": 1,
+    "results": [
+      {
+        "seatId": "seat-1",
+        "status": "UPDATED",
+        "seat": {}
+      },
+      {
+        "seatId": "seat-2",
+        "status": "FAILED",
+        "error": {
+          "code": "SEAT_NOT_FOUND",
+          "message": "Seat not found"
+        }
+      }
+    ]
+  }
+}
+```
+
+## Concurrency Testing
+
+The system was tested using Postman Runner with 50 parallel requests on the same seat.
+
+- Only 1 booking succeeded
+- 49 requests failed with 409 Conflict
+- No double booking occurred
+
+See `/docs/concurrency-test.md` for full details.
+
+## Key Concepts
+
+- **Locking**
+  - Redis provides temporary seat exclusivity.
+  - Prevents concurrent users from booking the same seat.
+
+- **TTL**
+  - Locks expire automatically.
+  - Reduces stale-lock risk and improves recovery.
+
+- **Transactions**
+  - PostgreSQL guarantees atomic booking writes.
+  - Seat state and booking creation succeed or fail together.
+
+- **Separation of Concerns**
+  - API, services, infrastructure, and utilities are split cleanly.
+  - Keeps the project easy to extend and debug.
+
+## Tradeoffs
+
+- Redis introduces eventual consistency in lock timing
+- System depends on TTL for recovery instead of distributed consensus
+- Slight complexity added for concurrency safety
+
+## Things that can be improved later
+
+- add idempotency keys for booking requests
+- introduce rate limiting on booking endpoint
+- improve lock handling using Lua scripts
+- add observability (logs, traces, metrics)
