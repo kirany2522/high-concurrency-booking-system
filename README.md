@@ -183,7 +183,7 @@ curl http://localhost:3000/seats
 ```bash
 curl -X POST http://localhost:3000/admin/seats \
   -H "Content-Type: application/json" \
-  -H "x-admin-api-key: dev-admin-key" \
+  -H "x-admin-api-key: your-generated-key" \
   -d '{"price":150,"count":20}'
 ```
 
@@ -198,7 +198,7 @@ Single-seat creation still works:
 ```bash
 curl -X POST http://localhost:3000/admin/seats \
   -H "Content-Type: application/json" \
-  -H "x-admin-api-key: dev-admin-key" \
+  -H "x-admin-api-key: your-generated-key" \
   -d '{"price":150}'
 ```
 
@@ -207,7 +207,7 @@ Update a seat:
 ```bash
 curl -X PATCH http://localhost:3000/admin/seats/seat-1 \
   -H "Content-Type: application/json" \
-  -H "x-admin-api-key: dev-admin-key" \
+  -H "x-admin-api-key: your-generated-key" \
   -d '{"price":180,"status":"AVAILABLE"}'
 ```
 
@@ -215,7 +215,7 @@ Delete a seat:
 
 ```bash
 curl -X DELETE http://localhost:3000/admin/seats/seat-1 \
-  -H "x-admin-api-key: dev-admin-key"
+  -H "x-admin-api-key: your-generated-key"
 ```
 
 Bulk update seats:
@@ -223,7 +223,7 @@ Bulk update seats:
 ```bash
 curl -X PATCH http://localhost:3000/admin/seats/bulk \
   -H "Content-Type: application/json" \
-  -H "x-admin-api-key: dev-admin-key" \
+  -H "x-admin-api-key: your-generated-key" \
   -d '{"seatIds":["seat-1","seat-2"],"price":180,"status":"AVAILABLE"}'
 ```
 
@@ -232,7 +232,7 @@ Bulk delete seats:
 ```bash
 curl -X DELETE http://localhost:3000/admin/seats/bulk \
   -H "Content-Type: application/json" \
-  -H "x-admin-api-key: dev-admin-key" \
+  -H "x-admin-api-key: your-generated-key" \
   -d '{"seatIds":["seat-1","seat-2"]}'
 ```
 
@@ -263,6 +263,16 @@ Bulk response shape:
   }
 }
 ```
+
+## Concurrency Testing
+
+The system was tested using Postman Runner with 50 parallel requests on the same seat.
+
+- Only 1 booking succeeded
+- 49 requests failed with 409 Conflict
+- No double booking occurred
+
+See `/docs/concurrency-test.md` for full details.
 
 ## Key Concepts
 
