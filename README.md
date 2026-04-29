@@ -106,7 +106,7 @@ The booking process follows a simple and safe sequence:
 - `POST /admin/seats`
   - Creates one or many seats in PostgreSQL.
   - Requires the `x-admin-api-key` header.
-  - Accepts `price` and optional `count` for bulk seat creation.
+  - Accepts validated `price` and optional `count` for bulk seat creation.
   - Useful for seeding inventory without touching the public booking flow.
 
 ## How to Run
@@ -166,6 +166,12 @@ curl -X POST http://localhost:3000/admin/seats \
   -H "x-admin-api-key: dev-admin-key" \
   -d '{"price":150,"count":20}'
 ```
+
+Validation rules:
+
+- `price` must be greater than `0` and at most `1000000`
+- `count` must be an integer between `1` and `500`
+- If `count` is omitted, the API creates `1` seat
 
 Single-seat creation still works:
 
