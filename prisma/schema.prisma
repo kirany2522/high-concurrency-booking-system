@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SeatStatus {
+  AVAILABLE
+  LOCKED
+  BOOKED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+model Seat {
+  id        String      @id @default(cuid())
+  status    SeatStatus  @default(AVAILABLE)
+  price     Decimal     @db.Decimal(10, 2)
+  version   Int         @default(0)
+  bookings  Booking[]
+}
+
+model Booking {
+  id        String         @id @default(cuid())
+  userId    String
+  seatId    String
+  status    BookingStatus  @default(PENDING)
+  expiresAt DateTime
+  seat      Seat           @relation(fields: [seatId], references: [id], onDelete: Restrict)
+
+  @@index([seatId])
+  @@index([userId])
+}
