@@ -109,6 +109,16 @@ The booking process follows a simple and safe sequence:
   - Accepts validated `price` and optional `count` for bulk seat creation.
   - Useful for seeding inventory without touching the public booking flow.
 
+- `PATCH /admin/seats/:seatId`
+  - Updates seat price or status.
+  - Requires the `x-admin-api-key` header.
+  - At least one field must be provided.
+
+- `DELETE /admin/seats/:seatId`
+  - Deletes a seat by id.
+  - Requires the `x-admin-api-key` header.
+  - Returns a conflict if the seat has related bookings.
+
 ## How to Run
 
 ### 1. Start infrastructure
@@ -180,6 +190,22 @@ curl -X POST http://localhost:3000/admin/seats \
   -H "Content-Type: application/json" \
   -H "x-admin-api-key: dev-admin-key" \
   -d '{"price":150}'
+```
+
+Update a seat:
+
+```bash
+curl -X PATCH http://localhost:3000/admin/seats/seat-1 \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: dev-admin-key" \
+  -d '{"price":180,"status":"AVAILABLE"}'
+```
+
+Delete a seat:
+
+```bash
+curl -X DELETE http://localhost:3000/admin/seats/seat-1 \
+  -H "x-admin-api-key: dev-admin-key"
 ```
 
 ## Key Concepts
