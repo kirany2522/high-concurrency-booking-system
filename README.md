@@ -119,6 +119,16 @@ The booking process follows a simple and safe sequence:
   - Requires the `x-admin-api-key` header.
   - Returns a conflict if the seat has related bookings.
 
+- `PATCH /admin/seats/bulk`
+  - Updates multiple seats in one request.
+  - Requires the `x-admin-api-key` header.
+  - Returns per-seat success and failure results.
+
+- `DELETE /admin/seats/bulk`
+  - Deletes multiple seats in one request.
+  - Requires the `x-admin-api-key` header.
+  - Returns per-seat success and failure results.
+
 ## How to Run
 
 ### 1. Start infrastructure
@@ -206,6 +216,52 @@ Delete a seat:
 ```bash
 curl -X DELETE http://localhost:3000/admin/seats/seat-1 \
   -H "x-admin-api-key: dev-admin-key"
+```
+
+Bulk update seats:
+
+```bash
+curl -X PATCH http://localhost:3000/admin/seats/bulk \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: dev-admin-key" \
+  -d '{"seatIds":["seat-1","seat-2"],"price":180,"status":"AVAILABLE"}'
+```
+
+Bulk delete seats:
+
+```bash
+curl -X DELETE http://localhost:3000/admin/seats/bulk \
+  -H "Content-Type: application/json" \
+  -H "x-admin-api-key: dev-admin-key" \
+  -d '{"seatIds":["seat-1","seat-2"]}'
+```
+
+Bulk response shape:
+
+```json
+{
+  "data": {
+    "status": "PARTIAL_SUCCESS",
+    "totalRequested": 2,
+    "successCount": 1,
+    "failureCount": 1,
+    "results": [
+      {
+        "seatId": "seat-1",
+        "status": "UPDATED",
+        "seat": {}
+      },
+      {
+        "seatId": "seat-2",
+        "status": "FAILED",
+        "error": {
+          "code": "SEAT_NOT_FOUND",
+          "message": "Seat not found"
+        }
+      }
+    ]
+  }
+}
 ```
 
 ## Key Concepts

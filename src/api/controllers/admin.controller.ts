@@ -14,6 +14,12 @@ const seatIdParamsSchema = z.object({
   seatId: z.string().min(1),
 });
 
+const bulkSeatIdsSchema = z.object({
+  seatIds: z.array(z.string().min(1)).min(1).max(500).refine((items) => new Set(items).size === items.length, {
+    message: "seatIds must be unique",
+  }),
+});
+
 const updateSeatSchema = z
   .object({
     price: z.coerce.number().positive().max(1000000).optional(),
@@ -76,6 +82,60 @@ export async function deleteSeat(req: Request, res: Response, next: NextFunction
   } catch (error) {
     logger.error("Admin seat delete failed", {
       seatId: req.params.seatId,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    next(error);
+  }
+}
+
+const bulkUpdateSeatSchema = bulkSeatIdsSchema.extend({
+  price: z.coerce.number().positive().max(1000000).optional(),
+  status: z.nativeEnum(SeatStatus).optional(),
+}).refine((value) => value.price !== undefined || value.status !== undefined, {
+  message: "At least one field must be provided",
+});
+
+export async function bulkUpdateSeats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const payload = bulkUpdateSeatSchema.parse(req.body);
+    const result = await inventoryService.bulkUpdateSeats(payload.seatIds, {
+      price: payload.price,
+      status: payload.status,
+    });
+
+    logger.info("Admin bulk seat update response sent", {
+      totalRequested: result.totalRequested,
+      successCount: result.successCount,
+      failureCount: result.failureCount,
+      status: result.status,
+    });
+
+    res.status(200).json({ data: result });
+  } catch (error) {
+    logger.error("Admin bulk seat update failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    next(error);
+  }
+}
+
+const bulkDeleteSeatSchema = bulkSeatIdsSchema;
+
+export async function bulkDeleteSeats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const payload = bulkDeleteSeatSchema.parse(req.body);
+    const result = await inventoryService.bulkDeleteSeats(payload.seatIds);
+
+    logger.info("Admin bulk seat delete response sent", {
+      totalRequested: result.totalRequested,
+      successCount: result.successCount,
+      failureCount: result.failureCount,
+      status: result.status,
+    });
+
+    res.status(200).json({ data: result });
+  } catch (error) {
+    logger.error("Admin bulk seat delete failed", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
     next(error);

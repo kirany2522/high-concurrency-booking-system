@@ -73,6 +73,58 @@ export const inventoryService = {
     }
   },
 
+  async bulkUpdateSeats(
+    seatIds: string[],
+    input: { price?: number; status?: SeatStatus },
+  ) {
+    logger.info("Admin bulk seat update started", {
+      seatCount: seatIds.length,
+      seatIds,
+      fields: Object.keys(input),
+    });
+
+    const results = await Promise.all(
+      seatIds.map(async (seatId) => {
+        try {
+          const seat = await this.updateSeat(seatId, input);
+          return {
+            seatId,
+            status: "UPDATED" as const,
+            seat,
+          };
+        } catch (error) {
+          return {
+            seatId,
+            status: "FAILED" as const,
+            error: {
+              code: error instanceof AppError ? error.code : "SEAT_UPDATE_FAILED",
+              message: error instanceof Error ? error.message : "Failed to update seat",
+            },
+          };
+        }
+      }),
+    );
+
+    const successCount = results.filter((item) => item.status === "UPDATED").length;
+    const failureCount = results.length - successCount;
+    const status = failureCount === 0 ? "SUCCESS" : successCount === 0 ? "FAILED" : "PARTIAL_SUCCESS";
+
+    logger.info("Admin bulk seat update completed", {
+      seatCount: seatIds.length,
+      successCount,
+      failureCount,
+      status,
+    });
+
+    return {
+      status,
+      totalRequested: seatIds.length,
+      successCount,
+      failureCount,
+      results,
+    };
+  },
+
   async deleteSeat(seatId: string) {
     try {
       return await prisma.seat.delete({
@@ -101,5 +153,53 @@ export const inventoryService = {
       });
       throw new AppError(500, "Failed to delete seat", "SEAT_DELETE_FAILED");
     }
+  },
+
+  async bulkDeleteSeats(seatIds: string[]) {
+    logger.info("Admin bulk seat delete started", {
+      seatCount: seatIds.length,
+      seatIds,
+    });
+
+    const results = await Promise.all(
+      seatIds.map(async (seatId) => {
+        try {
+          const seat = await this.deleteSeat(seatId);
+          return {
+            seatId,
+            status: "DELETED" as const,
+            seat,
+          };
+        } catch (error) {
+          return {
+            seatId,
+            status: "FAILED" as const,
+            error: {
+              code: error instanceof AppError ? error.code : "SEAT_DELETE_FAILED",
+              message: error instanceof Error ? error.message : "Failed to delete seat",
+            },
+          };
+        }
+      }),
+    );
+
+    const successCount = results.filter((item) => item.status === "DELETED").length;
+    const failureCount = results.length - successCount;
+    const status = failureCount === 0 ? "SUCCESS" : successCount === 0 ? "FAILED" : "PARTIAL_SUCCESS";
+
+    logger.info("Admin bulk seat delete completed", {
+      seatCount: seatIds.length,
+      successCount,
+      failureCount,
+      status,
+    });
+
+    return {
+      status,
+      totalRequested: seatIds.length,
+      successCount,
+      failureCount,
+      results,
+    };
   },
 };
